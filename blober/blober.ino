@@ -1,7 +1,7 @@
 int blob_pin = A0;
 int led = 13;
-int trig = 9;
-int trig_1 = A3;
+int ext_led = 9;
+int trig = 5;
 int tune_pin = A1;
 
 typedef enum {
@@ -15,7 +15,7 @@ void setup() {
   Serial.begin(115200);
   pinMode(led, OUTPUT);
   pinMode(trig, OUTPUT);
-  pinMode(trig_1, OUTPUT);
+  pinMode(ext_led, OUTPUT);
 }
 
 float level_mma = 0.5;
@@ -83,7 +83,7 @@ void loop() {
 
   digitalWrite(led, trig_state == TrigStateRun ? HIGH : LOW);
   digitalWrite(trig, trig_state == TrigStateRun ? HIGH : LOW);
-  digitalWrite(trig_1, trig_state == TrigStateAux ? HIGH : LOW);
+  digitalWrite(ext_led, trig_state == TrigStateRun ? HIGH : LOW);
 
   delay(1);
 }
