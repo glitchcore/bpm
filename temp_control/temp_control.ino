@@ -4,7 +4,7 @@ int ext_led = 6;
 int led = 13;
 
 float read_temp(int pin) {
-  const float R0 = 10e3;
+  const float R0 = 5.1e3;
   const float B = 3950;
   const float R25 = 10e3;
   const float T_BASE = 25;
