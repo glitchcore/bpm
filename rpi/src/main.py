@@ -8,6 +8,15 @@ from pyfirmata import Arduino, util
 from time import sleep
 import time
 
+from netifaces import ifaddresses
+
+import RPi.GPIO as GPIO
+
+BUTTON_GPIO = 24
+
+def get_my_ip():
+    return ifaddresses('wlan0')[2][0]['addr']
+
 '''
 board = Arduino("/dev/ttyAMA0")
 lfo = board.get_pin("d:9:p")
@@ -20,100 +29,63 @@ THRESHOLD_CORRECTION = 0.85
 HEIGHT = 600
 WIDTH = 1024
 
+blobs = 0
+bpm = None
+N = 0.1
+prev_blob_time = None
+
+DEBUG = True
+
+CAPTURE_TIMEOUT = 300
+
+def blob_callback(channel):
+    global blobs
+    global bpm
+    global prev_blob_time
+
+    if prev_blob_time == None:
+        prev_blob_time = time.time()
+        return
+
+    blobs += 1
+    interval = time.time() - prev_blob_time
+    next_bpm = 60. / interval
+    prev_blob_time = time.time()
+
+    if bpm == None:
+        bpm = next_bpm
+    else:
+        bpm = bpm * (1. - N) + next_bpm * N
+
+    if DEBUG:
+        print(
+            "get blob. Time: %f, interval: %f, next_bpm: %d, bpm: %d" %
+            (prev_blob_time, interval, next_bpm, bpm)
+        )
+
 def process_image(src, debug=True, update_contour=True):
-    src_blur = cv2.blur(src, (5,5))
-
-    src_hsv = cv2.cvtColor(src_blur, cv2.COLOR_BGR2HSV)
-    src_h, src_s, src_v = cv2.split(src_hsv)
-
-    src_norm = cv2.addWeighted(
-        src_s, 1.0,
-        255 - src_v, 0.8,
-        0
-    )
-
-    th_min = np.percentile(src_norm, 10)
-    th_max = np.percentile(src_norm, 90)
-
-    # what way of correction is right...
-    # threshold = th_max * THRESHOLD_CORRECTION + th_min * (1. - THRESHOLD_CORRECTION)
-    threshold = (th_max + th_min) * THRESHOLD_CORRECTION
-
-    ret, thresh = cv2.threshold(src_norm, threshold, 255, cv2.THRESH_TOZERO)
-    contours, hierarchy = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-
-    if len(contours) == 0:
-        return src
-    
-    max_contour = max(contours, key=lambda x: cv2.contourArea(x))
-
-    dimensions = src.shape
-
-    ooi_mask = cv2.drawContours(
-        np.zeros(dimensions, np.uint8),
-        [max_contour], -1, (255, 255, 255), -1
-    )
-
-    bg_mask = cv2.bitwise_not(ooi_mask)
-
-    # object
-    ooi = cv2.subtract(ooi_mask, src)
-    ooi = cv2.subtract(ooi_mask, ooi)
-    object_mean = cv2.mean(src, cv2.cvtColor(ooi_mask, cv2.COLOR_BGR2GRAY))
-
-    # background
-    bg = cv2.subtract(bg_mask, src)
-    bg = cv2.subtract(bg_mask, bg)
-    bg_mean = cv2.mean(src, cv2.cvtColor(bg_mask, cv2.COLOR_BGR2GRAY))
-
-    color = (
-        object_mean[2]/bg_mean[2] if bg_mean[2] > 0 else 0,
-        object_mean[1]/bg_mean[1] if bg_mean[1] > 0 else 0,
-        object_mean[0]/bg_mean[0] if bg_mean[0] > 0 else 0
-    )
-
-    out_img = cv2.addWeighted(
-        ooi, 1.5,
-        src_blur, 0.7,
-        0
-    )
-
-    out_img = cv2.drawContours(
-        out_img,
-        [max_contour], -1, (20, 50, 50), 1
-    )
-
-    out_img = cv2.resize(out_img, (WIDTH, HEIGHT))
+    out_img = cv2.resize(src, (WIDTH, HEIGHT))
 
     font = cv2.FONT_HERSHEY_SIMPLEX
     cv2.putText(
-        out_img, "red: %.02f" % color[0],
-        (28,20),
-        font, .5, (20,20,230), 1, cv2.LINE_AA
-    )
-    cv2.putText(
-        out_img, "green: %.02f" % color[1],
-        (10,40),
-        font, .5, (100,250,100), 1, cv2.LINE_AA
-    )
-    cv2.putText(
-        out_img, "blue: %.02f" % color[2],
-        (22,60),
-        font, .5, (230,20,20), 1, cv2.LINE_AA
+        out_img, "ip: %s" % get_my_ip(),
+        (10,15),
+        font, .5, (250,250,250), 1, cv2.LINE_AA
     )
 
-    if(debug):
-        print("red: %.02f, green: %.02f, blue: %.02f" % color, flush=True)
-        # print(th_min, th_max, threshold)
-        # print("object:", object_mean)
-        # print("bg:", bg_mean)
-        # cv2.imshow("object", ooi)
-        # cv2.imshow("background", bg)
-        # cv2.imshow("thresh", thresh)
+    cv2.putText(
+        out_img, "blob counter: %d" % blobs,
+        (80,80),
+        font, 2.5, (0,0,255), 8, cv2.LINE_AA
+    )
+
+    cv2.putText(
+        out_img, "%d BPM" % bpm,
+        (80,150),
+        font, 2.5, (0,0,255), 8, cv2.LINE_AA
+    )
 
     return out_img
-
-# cap = cv2.VideoCapture(0)
 
 def do_exit():
     if cap:
@@ -125,10 +97,6 @@ def do_exit():
 def signal_handler(sig, frame):
     print('You pressed Ctrl+C!')
     do_exit()
-
-signal.signal(signal.SIGINT, signal_handler)
-
-CAPTURE_TIMEOUT = 300
 
 def camera_thread(cap):
     print("BPM started")
@@ -166,18 +134,13 @@ def camera_thread(cap):
             no_frame_counter = 0
 
         # Our operations on the frame come here
-        # if frame_counter % 4 == 0:
-        # out_img = process_image(frame, frame_counter % 2 == 0)
-        #else:
-        #    out_img = cv2.resize(frame, (WIDTH, HEIGHT))
-        out_img = cv2.resize(frame, (WIDTH, HEIGHT))
-        # out_img = frame
+        out_img = process_image(frame)
 
         if time.time() - prev_time > CAPTURE_TIMEOUT:
             print("capuring:", capture_idx)
             capture_idx += 1
             prev_time = time.time()
-            cv2.imwrite("timelapse_" + str(capture_idx) + ".jpg", out_img)
+            cv2.imwrite("timelapse_" + str(int(time.time())) + ".jpg", out_img)
 
         # Display the resulting frame
         cv2.imshow('frame', out_img)
@@ -191,6 +154,12 @@ def load_image(image_name):
     out_img = process_image(img)
     cv2.imshow(image_name, out_img)
     cv2.waitKey(0)
+
+signal.signal(signal.SIGINT, signal_handler)
+
+GPIO.setmode(GPIO.BCM)
+GPIO.setup(BUTTON_GPIO, GPIO.IN, pull_up_down=GPIO.PUD_OFF)
+GPIO.add_event_detect(BUTTON_GPIO, GPIO.RISING, callback=blob_callback, bouncetime=100)
 
 if len(sys.argv) > 1:
     load_image(sys.argv[1])
