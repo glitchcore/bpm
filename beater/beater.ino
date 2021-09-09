@@ -1,61 +1,57 @@
 const int STEPS_PAD = 5;
-const int STEPS = 400;
 
-#include "beater.hpp"
-#include "sequencer.hpp"
+// #include "beater.hpp"
+// #include "sequencer.hpp"
 
 int led = 13;
 
-int en_0 = 3;
+int en = 3;
 int trig = 9;
-
-Beater beat0;
-Sequencer seq0;
-
-/*Beater beat1;
-Sequencer seq1;*/
+int stp = 5;
+int dir = 6;
 
 void setup() {
-    beat0.step = 5;
-    beat0.dir = 6;
-    beat0.step_target = STEPS;
-    beat0.step_delay = 300;
-
-    /*beat1.step = 6;
-    beat1.dir = 3;
-    beat1.step_target = STEPS;
-    beat1.step_delay = 400;*/
-
-    randomSeed(analogRead(0));
-    
-    pinMode(en_0, OUTPUT);
+    pinMode(en, OUTPUT);
     pinMode(led, OUTPUT);
+    pinMode(stp, OUTPUT);
+    pinMode(dir, OUTPUT);
 
     pinMode(trig, INPUT_PULLUP);
 
-    // break the stick
-    digitalWrite(en_0, HIGH);
-    delay(500);
-    digitalWrite(en_0, LOW);
-    delay(500);
-
-    init_beater(&beat0);
-    // init_beater(&beat1);
-
-    init_sequencer(&seq0);
-    // init_sequencer(&seq1);
-    
-    seq0.beater = &beat0;
-    // seq1.beater = &beat1;
-    seq0.period = 1000; // 400000;
-    // seq1.period = 600000;
-    seq0.trig = trig;
+    digitalWrite(en, HIGH);
 }
 
 void loop() {
-    update_sequencer(&seq0, micros());
-    // update_sequencer(&seq1, micros());
+  while(digitalRead(trig) == LOW) {}
 
-    update_beater(&beat0, micros());
-    // update_beater(&beat1, micros());
+  digitalWrite(en, LOW);
+  delay(5);
+  // push the stick
+  digitalWrite(dir, HIGH);
+
+  int period_us = 1000;
+  int accel_rest = 0;
+  int accel_n = 0;
+  int target_period = 100;
+  const int N = 8;
+  
+  for(int i = 0; i < 300; i++) {
+    digitalWrite(stp, HIGH);
+    delayMicroseconds(20);
+    digitalWrite(stp, LOW);
+
+    delayMicroseconds(period_us > target_period ? period_us : target_period);
+
+    accel_n += 1;
+    period_us -= (2 * period_us + accel_rest)/(N * accel_n + 1);
+    accel_rest = ((2 * period_us) + accel_rest) % (N * accel_n + 1);
+  }
+  // free fall
+  digitalWrite(en, HIGH);
+
+  digitalWrite(led, HIGH);
+  delay(100);
+  digitalWrite(led, LOW);
+
+  while(digitalRead(trig) == HIGH) {}
 }
