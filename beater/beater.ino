@@ -32,10 +32,10 @@ void loop() {
   int period_us = 1000;
   int accel_rest = 0;
   int accel_n = 0;
-  int target_period = 100;
+  int target_period = 50; // force of beat
   const int N = 8;
   
-  for(int i = 0; i < 300; i++) {
+  for(int i = 0; i < 400; i++) {
     digitalWrite(stp, HIGH);
     delayMicroseconds(20);
     digitalWrite(stp, LOW);
