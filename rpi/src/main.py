@@ -79,11 +79,12 @@ def process_image(src, debug=True, update_contour=True):
         font, 2.5, (0,0,255), 8, cv2.LINE_AA
     )
 
-    cv2.putText(
-        out_img, "%d BPM" % bpm,
-        (80,150),
-        font, 2.5, (0,0,255), 8, cv2.LINE_AA
-    )
+    if(bpm != None):
+        cv2.putText(
+            out_img, "%d BPM" % bpm,
+            (80,150),
+            font, 2.5, (0,0,255), 8, cv2.LINE_AA
+        )
 
     return out_img
 
