@@ -22,18 +22,18 @@ void setup() {
 
 bool heating = false;
 float temp = 20.0;
-const float N = 0.02;
+const float N_temp = 0.02;
+const float N_target = 1.0;
 float target_temp = 30;
 
 void loop() {
-  // put your main code here, to run repeatedly:
-  Serial.print(100); Serial.print(" ");
-  Serial.print(0); Serial.print(" ");
-
   analogWrite(ext_led, (1024 - analogRead(A2))/4);
 
-  temp = temp * (1. - N) + read_temp(A5) * N;
-  target_temp = target_temp * (1. - N) + ((float)analogRead(A3) * 80/1024.) * N;
+  temp = temp * (1. - N_temp) + read_temp(A5) * N_temp;
+  float target_raw = 1. - (float)analogRead(A3)/1024.;
+  float target_map = target_raw * (40 - 20) + 20;
+  
+  target_temp = target_temp * (1. - N_target) + target_map * N_target;
 
   if(heating) {
     if(temp > target_temp + 0.1) {
@@ -50,9 +50,11 @@ void loop() {
 
   // Serial.print(1024 - analogRead(A2)); Serial.print(" ");
   // Serial.print(1024 - analogRead(A3)); Serial.print(" ");
-  Serial.print(temp); Serial.print(" ");
-  Serial.print(target_temp); Serial.print(" ");
-  Serial.println();
+  Serial.print("{");
+  Serial.print("\"target_temp\":");Serial.print(target_temp);Serial.print(",");
+  Serial.print("\"heating\":");Serial.print(heating);Serial.print(",");
+  Serial.print("\"temp\":");Serial.print(temp);
+  Serial.print("}");Serial.println();
 
   delay(100);
 }
