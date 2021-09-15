@@ -1,3 +1,5 @@
+CAPTURING = False
+
 import numpy as np
 import cv2
 
@@ -12,19 +14,32 @@ from netifaces import ifaddresses
 
 import RPi.GPIO as GPIO
 
+import serial
+import json
+
 BUTTON_GPIO = 24
 
 def get_my_ip():
-    return ifaddresses('wlan0')[2][0]['addr']
+    try:
+        wlan0 = ifaddresses('wlan0')
+        if 2 in wlan0:
+            return wlan0[2][0]['addr']
+        else:
+            return None
+    except ValueError:
+        return None
 
-'''
-board = Arduino("/dev/ttyAMA0")
-lfo = board.get_pin("d:9:p")
-pitch = board.get_pin("d:5:p")
-cutoff = board.get_pin("d:6:p")
-'''
+ser = serial.Serial("/dev/ttyAMA0", 115200, timeout = 0.5)
 
-THRESHOLD_CORRECTION = 0.85
+def get_temp_param():
+    ser.reset_input_buffer()
+    s = ser.readline()
+    if len(s) == 0:
+        return None
+    try:
+        return json.loads(s)
+    except Exception:
+        return None
 
 HEIGHT = 600
 WIDTH = 1024
@@ -63,15 +78,22 @@ def blob_callback(channel):
             (prev_blob_time, interval, next_bpm, bpm)
         )
 
+frame_counter = 0
+
 def process_image(src, debug=True, update_contour=True):
+    global frame_counter
+    frame_counter += 1
+
     out_img = cv2.resize(src, (WIDTH, HEIGHT))
 
     font = cv2.FONT_HERSHEY_SIMPLEX
-    cv2.putText(
-        out_img, "ip: %s" % get_my_ip(),
-        (10,15),
-        font, .5, (250,250,250), 1, cv2.LINE_AA
-    )
+    my_ip = get_my_ip()
+    if my_ip is not None:
+        cv2.putText(
+            out_img, "ip: %s" % my_ip,
+            (10,15),
+            font, .5, (250,250,250), 1, cv2.LINE_AA
+        )
 
     cv2.putText(
         out_img, "blob counter: %d" % blobs,
@@ -85,6 +107,22 @@ def process_image(src, debug=True, update_contour=True):
             (80,150),
             font, 2.5, (0,0,255), 8, cv2.LINE_AA
         )
+
+    temp_param = get_temp_param()
+    if temp_param is not None:
+        cv2.putText(
+            out_img, "target temp: %s" % temp_param["target_temp"],
+            (80,200),
+            font, 1.5, (0,0,250), 3, cv2.LINE_AA
+        )
+        cv2.putText(
+            out_img, "current temp: %s" % temp_param["temp"],
+            (80,240),
+            font, 1.5, (0,0,250), 3, cv2.LINE_AA
+        )
+
+    if frame_counter % 20 == 0 and temp_param is not None:
+        print(temp_param, "bpm:", bpm, ", blobs:", blobs)
 
     return out_img
 
@@ -137,7 +175,7 @@ def camera_thread(cap):
         # Our operations on the frame come here
         out_img = process_image(frame)
 
-        if time.time() - prev_time > CAPTURE_TIMEOUT:
+        if CAPTURING and time.time() - prev_time > CAPTURE_TIMEOUT:
             print("capuring:", capture_idx)
             capture_idx += 1
             prev_time = time.time()
