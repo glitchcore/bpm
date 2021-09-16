@@ -1,4 +1,4 @@
-CAPTURING = False
+CAPTURING = True
 
 import numpy as np
 import cv2
