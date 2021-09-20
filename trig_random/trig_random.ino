@@ -14,12 +14,26 @@ void setup() {
 
 void loop() {
   // put your main code here, to run repeatedly:
-  bool level = digitalRead(in);
-  digitalWrite(synth_out, level);
-  digitalWrite(trig_out, level);
-  digitalWrite(led, level);
+  while(digitalRead(in) == LOW) {}
+  
+  int delay_time = (1023 - analogRead(A2)) * 9 + 1000;
+  Serial.print("pulse width:"); Serial.println(delay_time);
+  
+  digitalWrite(synth_out, HIGH);
+  digitalWrite(trig_out, HIGH);
+  digitalWrite(led, HIGH);
+  delayMicroseconds(delay_time);
+  digitalWrite(synth_out, LOW);
+  digitalWrite(trig_out, LOW);
+  digitalWrite(led, LOW);
+  
+  delay(1);
+  
+  while(digitalRead(in) == HIGH) {}
 
-  Serial.print(1024 - analogRead(A2)); Serial.print(" ");
+  delay(1);
+  
+  /*Serial.print(); Serial.print(" ");
   Serial.print(1024 - analogRead(A3)); Serial.print(" ");
-  Serial.println();
+  Serial.println();*/
 }
